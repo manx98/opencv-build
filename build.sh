@@ -18,7 +18,9 @@ if [[ ! -f "$OPENCV_SRC/CMakeLists.txt" ]]; then
   exit 1
 fi
 
-cmake -S "$OPENCV_SRC" -B "$BUILD_DIR" -G Ninja \
+mkdir -p "$BUILD_DIR"
+cmake_args=(
+  -G Ninja
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -51,11 +53,14 @@ cmake -S "$OPENCV_SRC" -B "$BUILD_DIR" -G Ninja \
   -DWITH_GTK=OFF \
   -DWITH_VULKAN="$WITH_VULKAN" \
   -DWITH_V4L=OFF
+)
+
+(cd "$BUILD_DIR" && cmake "${cmake_args[@]}" "$OPENCV_SRC")
 
 if [[ "$WITH_VULKAN" == "ON" ]] && ! grep -q '^HAVE_VULKAN=1$' "$BUILD_DIR/CMakeVars.txt"; then
   echo "Vulkan support is required but OpenCV did not enable it." >&2
   exit 1
 fi
 
-cmake --build "$BUILD_DIR" --parallel "$JOBS"
-cmake --install "$BUILD_DIR"
+cmake --build "$BUILD_DIR" -- -j "$JOBS"
+cmake --build "$BUILD_DIR" --target install
