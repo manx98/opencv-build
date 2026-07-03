@@ -38,7 +38,7 @@ jobs:
               export DEBIAN_FRONTEND=noninteractive
               apt-get update
               apt-get install -y --no-install-recommends \
-                build-essential ca-certificates cmake file git ninja-build patchelf pkg-config python3 tar wget libvulkan-dev
+                build-essential ca-certificates cmake file git ninja-build pkg-config python3 tar wget libvulkan-dev
 
               CMAKE_VERSION=3.22.6
               CMAKE_MAJOR_MINOR="${CMAKE_VERSION%.*}"
@@ -127,25 +127,6 @@ jobs:
               rm -rf "$BUILD_DIR" "$INSTALL_DIR"
               bash ./build.sh
 
-              mkdir -p "$INSTALL_DIR/lib"
-              cp -L /usr/lib/x86_64-linux-gnu/libvulkan.so.1 "$INSTALL_DIR/lib/libvulkan.so"
-              for so in "$INSTALL_DIR"/lib/libopencv_*.so*; do
-                [[ -f "$so" ]] || continue
-                ldd "$so" | awk '\''/=> \// {print $3}'\'' | while read -r dep; do
-                  dep_name="$(basename "$dep")"
-                  dst="$INSTALL_DIR/lib/$dep_name"
-                  case "$dep_name" in
-                    libc.so.*|libm.so.*|libdl.so.*|libpthread.so.*|librt.so.*|ld-linux-*.so.*|libstdc++*.so.*|libgcc*.so.*) ;;
-                    *)
-                      if [[ -e "$dst" ]] && [[ "$(readlink -f "$dep")" == "$(readlink -f "$dst")" ]]; then
-                        continue
-                      fi
-                      cp -Ln "$dep" "$INSTALL_DIR/lib/"
-                      ;;
-                  esac
-                done
-              done
-              find "$INSTALL_DIR/lib" -maxdepth 1 -name "libopencv_*.so*" -type f -exec patchelf --set-rpath "\$ORIGIN" {} +
 
               {
                 echo "OpenCV: $(pkg_config_version opencv4 "$INSTALL_DIR")"
@@ -169,26 +150,12 @@ jobs:
               build_ncnn
 
               mkdir -p "$INSTALL_DIR/lib"
-              if [[ -f /usr/lib/x86_64-linux-gnu/libvulkan.so.1 ]]; then
-                cp -L /usr/lib/x86_64-linux-gnu/libvulkan.so.1 "$INSTALL_DIR/lib/libvulkan.so.1"
+              gomp_lib="$(gcc -print-file-name=libgomp.so.1)"
+              if [[ ! -f "$gomp_lib" ]]; then
+                echo "libgomp.so.1 not found." >&2
+                exit 1
               fi
-              for so in "$INSTALL_DIR"/lib/libncnn*.so*; do
-                [[ -f "$so" ]] || continue
-                ldd "$so" | awk '\''/=> \// {print $3}'\'' | while read -r dep; do
-                  dep_name="$(basename "$dep")"
-                  dst="$INSTALL_DIR/lib/$dep_name"
-                  case "$dep_name" in
-                    libc.so.*|libm.so.*|libdl.so.*|libpthread.so.*|librt.so.*|ld-linux-*.so.*|libstdc++*.so.*|libgcc*.so.*) ;;
-                    *)
-                      if [[ -e "$dst" ]] && [[ "$(readlink -f "$dep")" == "$(readlink -f "$dst")" ]]; then
-                        continue
-                      fi
-                      cp -Ln "$dep" "$INSTALL_DIR/lib/"
-                      ;;
-                  esac
-                done
-              done
-              find "$INSTALL_DIR/lib" -maxdepth 1 -name "libncnn*.so*" -type f -exec patchelf --set-rpath "\$ORIGIN" {} +
+              cp -L "$gomp_lib" "$INSTALL_DIR/lib/"
 
               {
                 echo "ncnn: $(pkg_config_version ncnn "$INSTALL_DIR")"
@@ -196,6 +163,7 @@ jobs:
                 echo "Vulkan: required"
                 echo "Shared lib: ON"
                 echo "OpenMP: ON"
+                echo "Bundled dependencies: libgomp only"
                 echo "Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
               } > "$INSTALL_DIR/BUILD_INFO.txt"
 
@@ -313,21 +281,6 @@ jobs:
           rm -rf "$BUILD_DIR" "$INSTALL_DIR"
           bash ./build.sh
 
-          mkdir -p "$INSTALL_DIR/bin"
-          copied_vulkan=0
-          for dll in /ucrt64/bin/libvulkan-1.dll /ucrt64/bin/vulkan-1.dll; do
-            if [[ -f "$dll" ]]; then
-              cp -L "$dll" "$INSTALL_DIR/bin"
-              copied_vulkan=1
-            fi
-          done
-          if [[ "$copied_vulkan" -ne 1 ]]; then
-            echo "Vulkan loader DLL not found." >&2
-            exit 1
-          fi
-          for dll in libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll; do
-            cp -L "/ucrt64/bin/$dll" "$INSTALL_DIR/bin/"
-          done
 
           # Do not package real static archives on Windows.
           # Keep MinGW .dll.a import libraries because they are required to link against the packaged DLLs.
@@ -355,22 +308,11 @@ jobs:
           build_ncnn
 
           mkdir -p "$INSTALL_DIR/bin"
-          copied_vulkan=0
-          for dll in /ucrt64/bin/libvulkan-1.dll /ucrt64/bin/vulkan-1.dll; do
-            if [[ -f "$dll" ]]; then
-              cp -L "$dll" "$INSTALL_DIR/bin"
-              copied_vulkan=1
-            fi
-          done
-          if [[ "$copied_vulkan" -ne 1 ]]; then
-            echo "Vulkan loader DLL not found." >&2
+          if [[ ! -f /ucrt64/bin/libgomp-1.dll ]]; then
+            echo "libgomp-1.dll not found." >&2
             exit 1
           fi
-          for dll in libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll libgomp-1.dll; do
-            if [[ -f "/ucrt64/bin/$dll" ]]; then
-              cp -L "/ucrt64/bin/$dll" "$INSTALL_DIR/bin/"
-            fi
-          done
+          cp -L /ucrt64/bin/libgomp-1.dll "$INSTALL_DIR/bin/"
 
           # Do not package real static archives on Windows.
           # Keep MinGW .dll.a import libraries because they are required to link against the packaged DLLs.
@@ -382,6 +324,7 @@ jobs:
             echo "Vulkan: required"
             echo "Shared lib: ON"
             echo "OpenMP: ON"
+            echo "Bundled dependencies: libgomp only"
             echo "Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > "$INSTALL_DIR/BUILD_INFO.txt"
 
