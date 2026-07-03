@@ -102,6 +102,10 @@ jobs:
                   -DNCNN_VULKAN="$WITH_VULKAN"
                   -DNCNN_SYSTEM_GLSLANG=OFF
                   -DNCNN_OPENMP="$NCNN_OPENMP"
+                  -DNCNN_AVX512=OFF
+                  -DNCNN_AVX512VNNI=OFF
+                  -DNCNN_AVX512BF16=OFF
+                  -DNCNN_AVX512FP16=OFF
                   -DNCNN_BUILD_TOOLS=OFF
                   -DNCNN_BUILD_EXAMPLES=OFF
                   -DNCNN_BUILD_BENCHMARK=OFF
